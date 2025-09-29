@@ -4,41 +4,9 @@
 # TCP Tahoe Simulation
 import csv
 import random
+from utils import * 
 from typing import Iterator, List, TextIO
 
-# indexes of each value when reading from the input csv
-NO_INDEX : int = 0
-TIME_INDEX : int = 1
-SOURCE_INDEX : int = 2
-DESTINATION_INDEX : int = 3
-BYTES_IN_FLIGHT_INDEX : int = 6
-TCP_DELTA_INDEX : int = 7
-TCP_SEG_LEN_INDEX : int = 8
-CALCED_WINDOW_SIZE_INDEX : int = 9
-INFO_INDEX : int = 10
-PHASE_INDEX : int = 11
-
-# file constants
-READ_FILE_NAME : str = "input-data.csv"
-READ_FILE : TextIO = open(READ_FILE_NAME, "r") 
-FILE_READER : Iterator[List[str]] = csv.reader(READ_FILE)
-
-RENO_FILE : TextIO = open("reno.csv", "w", newline='')
-RENO_WRITER : csv.writer = csv.writer(RENO_FILE)
-
-TAHOE_FILE : TextIO = open("tahoe.csv", "w", newline='')
-TAHOE_WRITER : csv.writer = csv.writer(TAHOE_FILE)
-
-# ips
-CLIENT_IP : str = "192.168.10.184"
-SERVER_IP : str = "192.168.10.196"
-
-# others
-ROWS : List[List[str]] = list(FILE_READER)
-MAX_ROW : int = len(ROWS)
-
-MSS : int = 1460
-CWND_BEFORE_CONGESTION : int = 262144 # I pulled this off the trace file
 
 # def simulateReno(starting_index : int):
     
@@ -52,41 +20,53 @@ CWND_BEFORE_CONGESTION : int = 262144 # I pulled this off the trace file
 #     return
 
 def simulateTahoe(starting_index : int):
+    
     ssthreshold : int = CWND_BEFORE_CONGESTION // 2
     cwnd : int = MSS # starts at 1 for Tahoe
-    time: float = float(ROWS[starting_index][TIME_INDEX])
+    cur_rtt : float = 0.1 # default at start
+    
+    total_bytes_to_send : int = get_bytes_sent_in_range(ROWS, starting_index, MAX_ROW - 1)
+    total_MSS_to_send : int = bytes_to_MSS(total_bytes_to_send)
+    
+    mss_sent : int = 0
+    bytes_in_flight : int = 0    
     index : int = starting_index
     phase : str = "SS"
     
     # first implement slow start phase
-    while index < MAX_ROW:
+    while index < MAX_ROW and mss_sent < total_MSS_to_send:
         row : List[str] = ROWS[index]
+        source : str = row[SOURCE_INDEX]
         
-        # Decide phase
         if cwnd >= ssthreshold:
             phase = "CA"
+                
+        if source == CLIENT_IP:
+            seq : int = parse_seq_from_info(row[INFO_INDEX])
+            
+            new_row = [
+            row[NO_INDEX],
+            row[TIME_INDEX],
+            row[TCP_DELTA_INDEX],
+            row[SOURCE_INDEX],
+            row[DESTINATION_INDEX],
+            row[TCP_SEG_LEN_INDEX],
+            row[BYTES_IN_FLIGHT_INDEX],
+            cwnd,
+            row[INFO_INDEX],
+            phase
+            ]
+
+            TAHOE_WRITER.writerow(new_row)
+        else:
+            if phase == "SS":
+                cwnd += MSS
+            else:
+                cwnd += (MSS * MSS) // cwnd
+            
+            TAHOE_WRITER.writerow(row)
         index+=1
         
-        if phase == "SS":
-            cwnd += MSS
-        else:
-            cwnd += MSS * MSS // cwnd
-        
-        new_row = [
-        row[NO_INDEX],
-        row[TIME_INDEX],
-        row[TCP_DELTA_INDEX],
-        row[SOURCE_INDEX],
-        row[DESTINATION_INDEX],
-        row[TCP_SEG_LEN_INDEX],
-        row[BYTES_IN_FLIGHT_INDEX],
-        row[CALCED_WINDOW_SIZE_INDEX],
-        row[INFO_INDEX],
-        phase
-        ]
-        
-        TAHOE_WRITER.writerow(new_row)
-            
     return 
 
 # add the phase column
