@@ -1,0 +1,1 @@
+To use TahoeSim.py and RenoSim.py, you need to have the ProjectDataV2.csv file in the same directory as them.  Each one will then create a CSV file called Tahow.csv and Reno.csv, respectively.
